@@ -1,0 +1,84 @@
+import pandas as pd
+import time
+import random
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# Base URL of the target page
+base_url = "https://dealer-locator.cars.tatamotors.com/location/delhi?cot=151&v=1.123&page="
+
+# Path to the chromedriver executable (located in the same directory as the script)
+chromedriver_path = './chromedriver.exe'  # Change this if your file name or path is different
+
+# Setting up Chrome options for headless mode
+options = Options()
+options.add_argument("--headless")  # Run in headless mode (without GUI)
+options.page_load_strategy = "eager"  # Eager loading strategy to wait for DOMContentLoaded event
+
+# Initialize Chrome WebDriver
+service = Service(executable_path=chromedriver_path)
+driver = webdriver.Chrome(service=service, options=options)
+
+# List of User Agents
+userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+]
+
+# Number of pages to scrape
+pages = 3
+page_delay = 5  # Delay between page scrolls
+
+# List to store company data
+companies = [
+    ["Title", "Address", "District", "City", "Pin Code", "Phone No", "What3Words"]
+]
+
+# Loop through pages
+for page in range(1, pages + 1):
+    # Set User-Agent for the current request
+    user_agent = random.choice(userAgents)
+    options.add_argument(f'user-agent={user_agent}')
+    
+    driver.get(f"{base_url}{page}")
+
+    # Wait for the elements to be present
+    wait = WebDriverWait(driver, 10)
+    box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class="outlet-list"]')))
+    
+    # Scroll to the bottom of the page
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(page_delay)  # Wait for content to load
+
+    # Extract data from the page
+    for element in box.find_elements(By.CSS_SELECTOR, 'div[class="store-info-box"]'):
+        try:
+            title = element.find_element(By.CSS_SELECTOR, 'a').get_attribute('title')
+            address = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li.outlet-name div.info-text span').text
+            district = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li:nth-child(2) div.info-text span:nth-child(3) span:nth-child(1)').text
+            city = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li:nth-child(3) div.info-text span:nth-child(1)').text
+            pin_code = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li:nth-child(3) div.info-text span:nth-child(2)').text
+            phone_no = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li.outlet-phone a').text
+            what3words = element.find_element(By.CSS_SELECTOR, 'ul.list-unstyled.outlet-detail.first li.outlet-what3words a').text
+            
+            companies.append([title, address, district, city, pin_code, phone_no, what3words])
+        except Exception as e:
+            print(f"An error occurred while processing an element: {e}")
+
+    print(f"Page {page} of {pages} loaded")
+
+# Close the driver
+driver.quit()
+
+# Convert the list to a DataFrame and save as CSV
+df = pd.DataFrame(companies[1:], columns=companies[0])
+df.to_csv("Companies.csv", index=False)
+
+print("Data extraction complete and saved to Companies.csv")
